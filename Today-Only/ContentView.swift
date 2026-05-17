@@ -27,7 +27,7 @@ struct ContentView: View {
 
             addTaskSection
         }
-        .background(Color(.systemGroupedBackground))
+        .background(AppTheme.screenBackground)
         .onAppear {
             viewModel.clampSelectedExpirationTime()
             try? viewModel.reloadTasks()
@@ -80,12 +80,12 @@ struct ContentView: View {
             if let message = viewModel.validationErrorMessage {
                 Text(message)
                     .font(.footnote)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppTheme.validationError)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding()
-        .background(.bar)
+        .background(AppTheme.elevatedSurface)
     }
 
     private func submitNewTask() {
@@ -98,11 +98,21 @@ struct ContentView: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     ContentView(
         viewModel: TodayTodoViewModel(
             store: TodoTaskStore(),
             dateProvider: SystemDateProvider()
         )
     )
+}
+
+#Preview("Dark") {
+    ContentView(
+        viewModel: TodayTodoViewModel(
+            store: TodoTaskStore(),
+            dateProvider: SystemDateProvider()
+        )
+    )
+    .preferredColorScheme(.dark)
 }

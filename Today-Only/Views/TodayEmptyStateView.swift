@@ -10,14 +10,16 @@ struct TodayEmptyStateView: View {
         VStack(spacing: 12) {
             Image(systemName: "sun.max")
                 .font(.system(size: 44))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(.secondaryLabel))
+                .symbolRenderingMode(.hierarchical)
 
             Text("No tasks for today")
                 .font(.headline)
+                .foregroundStyle(Color(.label))
 
             Text("Add a task below to get started.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(.secondaryLabel))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

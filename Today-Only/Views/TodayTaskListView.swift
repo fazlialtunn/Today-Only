@@ -18,12 +18,13 @@ struct TodayTaskListView: View {
                     Section {
                         if viewModel.visibleTasks.isEmpty {
                             Text("No active tasks for today")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color(.secondaryLabel))
                         } else {
                             ForEach(viewModel.visibleTasks) { task in
                                 TaskRowView(task: task) {
                                     onToggle(task.id)
                                 }
+                                .listRowBackground(AppTheme.listRowBackground)
                             }
                         }
                     }
@@ -32,19 +33,23 @@ struct TodayTaskListView: View {
                         Section {
                             if viewModel.expiredTasks.isEmpty {
                                 Text("No expired tasks")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color(.secondaryLabel))
                             } else {
                                 ForEach(viewModel.expiredTasks) { task in
                                     ExpiredTaskRowView(task: task)
+                                        .listRowBackground(AppTheme.listRowBackground)
                                 }
                             }
                         } header: {
                             Text("Expired")
+                                .foregroundStyle(Color(.secondaryLabel))
                         }
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+        .background(AppTheme.screenBackground)
     }
 }
