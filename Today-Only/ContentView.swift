@@ -21,14 +21,13 @@ struct ContentView: View {
 
             showExpiredToggle
 
-            TodayTaskListView(viewModel: viewModel) { id in
-                try? viewModel.toggleCompletion(for: id)
-            }
+            TodayTaskListView(viewModel: viewModel, onToggle: toggleTask)
 
             addTaskSection
         }
         .background(AppTheme.screenBackground)
         .onAppear {
+            HapticFeedback.prepareGenerators()
             viewModel.clampSelectedExpirationTime()
             try? viewModel.reloadTasks()
         }
@@ -92,9 +91,16 @@ struct ContentView: View {
         do {
             try viewModel.addTask(title: newTaskTitle)
             newTaskTitle = ""
+            HapticFeedback.taskAdded()
         } catch {
             // validationErrorMessage is set by the view model
         }
+    }
+
+    private func toggleTask(id: UUID) {
+        guard viewModel.visibleTasks.contains(where: { $0.id == id }) else { return }
+        try? viewModel.toggleCompletion(for: id)
+        HapticFeedback.taskToggled()
     }
 }
 
