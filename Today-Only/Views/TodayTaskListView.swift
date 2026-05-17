@@ -12,13 +12,23 @@ struct TodayTaskListView: View {
     var body: some View {
         Group {
             if viewModel.visibleTasks.isEmpty && !viewModel.isShowingExpired {
-                TodayEmptyStateView()
+                TodayEmptyStateView(style: TodayEmptyStateView.resolveWhenEmpty(for: viewModel))
             } else {
                 List {
+                    if TodayEmptyStateView.allTasksCompleted(in: viewModel) {
+                        Section {
+                            TodayEmptyStateView(style: .allCompleted, isCompact: true)
+                                .listRowBackground(Color.clear)
+                        }
+                    }
+
                     Section {
                         if viewModel.visibleTasks.isEmpty {
-                            Text("No active tasks for today")
-                                .foregroundStyle(Color(.secondaryLabel))
+                            TodayEmptyStateView(
+                                style: TodayEmptyStateView.resolveWhenEmpty(for: viewModel),
+                                isCompact: true
+                            )
+                            .listRowBackground(Color.clear)
                         } else {
                             ForEach(viewModel.visibleTasks) { task in
                                 TaskRowView(task: task) {
