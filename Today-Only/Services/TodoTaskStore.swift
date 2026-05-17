@@ -8,6 +8,7 @@ import Foundation
 enum TodoTaskStoreError: LocalizedError {
     case emptyTitle
     case taskNotFound(UUID)
+    case invalidExpiration(TaskExpirationValidationError)
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,8 @@ enum TodoTaskStoreError: LocalizedError {
             return "Task title cannot be empty."
         case .taskNotFound(let id):
             return "No task found with id \(id.uuidString)."
+        case .invalidExpiration(let error):
+            return error.errorDescription
         }
     }
 }
@@ -23,14 +26,22 @@ protocol TodoTaskStoring {
     func loadTasks() throws -> [TodoTask]
     func saveTasks(_ tasks: [TodoTask]) throws
     @discardableResult
-    func addTask(title: String) throws -> TodoTask
+    func addTask(title: String, expiresAt: Date?) throws -> TodoTask
     func updateTask(_ task: TodoTask) throws
+}
+
+extension TodoTaskStoring {
+    @discardableResult
+    func addTask(title: String) throws -> TodoTask {
+        try addTask(title: title, expiresAt: nil)
+    }
 }
 
 final class TodoTaskStore: TodoTaskStoring {
     private let fileURL: URL
     private let dateProvider: DateProviding
     private let todayFilter: TodayTaskFilter
+    private let expirationValidator: TaskExpirationValidator
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -43,6 +54,7 @@ final class TodoTaskStore: TodoTaskStoring {
         self.fileURL = fileURL ?? Self.defaultFileURL(fileManager: fileManager)
         self.dateProvider = dateProvider
         self.todayFilter = TodayTaskFilter(dateProvider: dateProvider)
+        self.expirationValidator = TaskExpirationValidator(dateProvider: dateProvider)
         self.fileManager = fileManager
 
         let encoder = JSONEncoder()
@@ -55,33 +67,48 @@ final class TodoTaskStore: TodoTaskStoring {
         self.decoder = decoder
     }
 
-    /// Returns only tasks whose `createdAt` falls on the current calendar day.
+    /// Returns tasks that are created today and not expired.
     func loadTasks() throws -> [TodoTask] {
         let stored = try readPersistedTasksFromDisk()
-        return todayFilter.tasksForToday(from: stored.tasks)
+        return todayFilter.visibleTasks(from: stored.tasks)
     }
 
-    /// Replaces today's tasks while preserving tasks from previous days on disk.
+    /// Replaces today's visible tasks while preserving older and expired tasks on disk.
     func saveTasks(_ tasks: [TodoTask]) throws {
         var stored = try readPersistedTasksFromDisk()
-        let olderTasks = stored.tasks.filter { !todayFilter.isCreatedToday($0) }
-        stored.tasks = olderTasks + tasks
+        let preserved = stored.tasks.filter { !todayFilter.isCreatedToday($0) }
+        let todayOnDisk = stored.tasks.filter { todayFilter.isCreatedToday($0) }
+        let expiredToday = todayOnDisk.filter { todayFilter.isExpired($0) }
+        stored.tasks = preserved + expiredToday + tasks
         try persist(stored)
     }
 
     @discardableResult
-    func addTask(title: String) throws -> TodoTask {
+    func addTask(title: String, expiresAt: Date? = nil) throws -> TodoTask {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TodoTaskStoreError.emptyTitle }
 
+        let createdAt = dateProvider.now()
+        do {
+            try expirationValidator.validate(expiresAt: expiresAt, createdAt: createdAt)
+        } catch let error as TaskExpirationValidationError {
+            throw TodoTaskStoreError.invalidExpiration(error)
+        }
+
         var stored = try readPersistedTasksFromDisk()
-        let task = TodoTask(title: trimmed, createdAt: dateProvider.now())
+        let task = TodoTask(title: trimmed, createdAt: createdAt, expiresAt: expiresAt)
         stored.tasks.append(task)
         try persist(stored)
         return task
     }
 
     func updateTask(_ task: TodoTask) throws {
+        do {
+            try expirationValidator.validate(expiresAt: task.expiresAt, createdAt: task.createdAt)
+        } catch let error as TaskExpirationValidationError {
+            throw TodoTaskStoreError.invalidExpiration(error)
+        }
+
         var stored = try readPersistedTasksFromDisk()
         guard let index = stored.tasks.firstIndex(where: { $0.id == task.id }) else {
             throw TodoTaskStoreError.taskNotFound(task.id)

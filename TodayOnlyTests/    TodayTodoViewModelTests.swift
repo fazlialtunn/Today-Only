@@ -72,18 +72,69 @@ final class TodayTodoViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.tasks.first?.isCompleted ?? true)
     }
 
+    func test_expiredTaskIsHidden() throws {
+        let createdAt = today!
+        let expiredAt = testCalendar.date(byAdding: .hour, value: 1, to: createdAt)!
+        try seedTask(
+            title: "Expired task",
+            createdOn: createdAt,
+            expiresAt: expiredAt
+        )
+
+        let afterExpiration = testCalendar.date(byAdding: .hour, value: 2, to: createdAt)!
+        let viewModel = makeViewModel(fixedDate: afterExpiration)
+        try viewModel.reloadTasks()
+
+        XCTAssertTrue(viewModel.tasks.isEmpty)
+    }
+
+    func test_futureExpirationTaskIsVisible() throws {
+        let createdAt = today!
+        let expiresAt = testCalendar.date(byAdding: .hour, value: 2, to: createdAt)!
+        try seedTask(
+            title: "Later task",
+            createdOn: createdAt,
+            expiresAt: expiresAt
+        )
+
+        let viewModel = makeViewModel(fixedDate: createdAt)
+        try viewModel.reloadTasks()
+
+        XCTAssertEqual(viewModel.tasks.count, 1)
+        XCTAssertEqual(viewModel.tasks.first?.title, "Later task")
+    }
+
+    func test_addTaskRejectsPastExpiration() throws {
+        let viewModel = makeViewModel(fixedDate: today)
+        viewModel.isExpirationEnabled = true
+        viewModel.selectedExpirationTime = today
+
+        XCTAssertThrowsError(try viewModel.addTask(title: "Invalid")) { error in
+            guard case TodayTodoViewModelError.invalidExpiration = error else {
+                return XCTFail("Expected invalidExpiration, got \(error)")
+            }
+        }
+        XCTAssertTrue(viewModel.tasks.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func makeViewModel(fixedDate: Date) -> TodayTodoViewModel {
         let dateProvider = FixedDateProvider(fixedDate: fixedDate, calendar: testCalendar)
         let store = TodoTaskStore(fileURL: tempFileURL, dateProvider: dateProvider)
-        return TodayTodoViewModel(store: store, dateProvider: dateProvider)
+        let viewModel = TodayTodoViewModel(store: store, dateProvider: dateProvider)
+        viewModel.clampSelectedExpirationTime()
+        return viewModel
     }
 
-    private func seedTask(title: String, createdOn date: Date) throws {
+    private func seedTask(
+        title: String,
+        createdOn date: Date,
+        expiresAt: Date? = nil
+    ) throws {
         let dateProvider = FixedDateProvider(fixedDate: date, calendar: testCalendar)
         let store = TodoTaskStore(fileURL: tempFileURL, dateProvider: dateProvider)
-        _ = try store.addTask(title: title)
+        _ = try store.addTask(title: title, expiresAt: expiresAt)
     }
 
     private static func makeTestCalendar() -> Calendar {

@@ -6,18 +6,43 @@
 import Combine
 import Foundation
 
+enum TodayTodoViewModelError: LocalizedError, Equatable {
+    case invalidExpiration(TaskExpirationValidationError)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidExpiration(let error):
+            return error.errorDescription
+        }
+    }
+}
+
 @MainActor
 final class TodayTodoViewModel: ObservableObject {
     @Published private(set) var tasks: [TodoTask] = []
+    @Published var isExpirationEnabled = false
+    @Published var selectedExpirationTime: Date
+    @Published private(set) var validationErrorMessage: String?
 
     private let store: TodoTaskStoring
     private let dateProvider: DateProviding
     private let todayFilter: TodayTaskFilter
+    private let expirationValidator: TaskExpirationValidator
     private var lastKnownDayKey: String?
 
     /// Current moment from the injected clock (used for the header date).
     var currentDate: Date {
         dateProvider.now()
+    }
+
+    /// Allowed range for the expiration time picker: from now through end of today.
+    var expirationTimeRange: ClosedRange<Date> {
+        let now = dateProvider.now()
+        let end = dateProvider.calendar.endOfDay(for: now)
+        if now <= end {
+            return now ... end
+        }
+        return now ... now
     }
 
     init(
@@ -28,19 +53,27 @@ final class TodayTodoViewModel: ObservableObject {
         self.store = store
         self.dateProvider = dateProvider
         self.todayFilter = todayFilter ?? TodayTaskFilter(dateProvider: dateProvider)
+        self.expirationValidator = TaskExpirationValidator(dateProvider: dateProvider)
+        self.selectedExpirationTime = dateProvider.now()
     }
 
-    /// Loads from storage and publishes only tasks created on the current calendar day.
+    /// Loads visible tasks from storage and updates published state.
     func reloadTasks() throws {
         let loaded = try store.loadTasks()
-        tasks = Self.sortedTodayTasks(from: loaded, using: todayFilter)
+        tasks = Self.sortedVisibleTasks(from: loaded, using: todayFilter)
         lastKnownDayKey = currentDayKey()
+        clampSelectedExpirationTime()
     }
 
-    /// Reloads when the calendar day changes (e.g. app returns from background after midnight).
+    /// Reloads when the calendar day changes.
     func refreshForCurrentDay() throws {
         let dayKey = currentDayKey()
         guard dayKey != lastKnownDayKey else { return }
+        try reloadTasks()
+    }
+
+    /// Re-applies expiration filtering (e.g. when `now` passes `expiresAt`).
+    func refreshExpiredTasks() throws {
         try reloadTasks()
     }
 
@@ -49,7 +82,16 @@ final class TodayTodoViewModel: ObservableObject {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        _ = try store.addTask(title: trimmed)
+        let expiresAt = try resolvedExpirationDateForNewTask()
+        do {
+            _ = try store.addTask(title: trimmed, expiresAt: expiresAt)
+        } catch let error as TodoTaskStoreError {
+            if case .invalidExpiration(let validationError) = error {
+                throw TodayTodoViewModelError.invalidExpiration(validationError)
+            }
+            throw error
+        }
+        validationErrorMessage = nil
         try reloadTasks()
     }
 
@@ -62,17 +104,39 @@ final class TodayTodoViewModel: ObservableObject {
         tasks[index] = updated
     }
 
+    func clampSelectedExpirationTime() {
+        let range = expirationTimeRange
+        if selectedExpirationTime < range.lowerBound {
+            selectedExpirationTime = range.lowerBound
+        } else if selectedExpirationTime > range.upperBound {
+            selectedExpirationTime = range.upperBound
+        }
+    }
+
     // MARK: - Private
+
+    private func resolvedExpirationDateForNewTask() throws -> Date? {
+        guard isExpirationEnabled else { return nil }
+
+        let createdAt = dateProvider.now()
+        do {
+            try expirationValidator.validate(expiresAt: selectedExpirationTime, createdAt: createdAt)
+        } catch let error as TaskExpirationValidationError {
+            validationErrorMessage = error.errorDescription
+            throw TodayTodoViewModelError.invalidExpiration(error)
+        }
+        return selectedExpirationTime
+    }
 
     private func currentDayKey() -> String {
         Self.dayKey(for: dateProvider.now(), calendar: dateProvider.calendar)
     }
 
-    private static func sortedTodayTasks(
+    private static func sortedVisibleTasks(
         from tasks: [TodoTask],
         using filter: TodayTaskFilter
     ) -> [TodoTask] {
-        filter.tasksForToday(from: tasks)
+        filter.visibleTasks(from: tasks)
             .sorted { $0.createdAt < $1.createdAt }
     }
 
