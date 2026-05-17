@@ -19,6 +19,8 @@ struct ContentView: View {
         VStack(spacing: 0) {
             TodayHeaderView(date: viewModel.currentDate)
 
+            showExpiredToggle
+
             TodayTaskListView(viewModel: viewModel) { id in
                 try? viewModel.toggleCompletion(for: id)
             }
@@ -39,6 +41,12 @@ struct ContentView: View {
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
             try? viewModel.refreshExpiredTasks()
         }
+    }
+
+    private var showExpiredToggle: some View {
+        Toggle("Show expired", isOn: $viewModel.isShowingExpired)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
     }
 
     private var addTaskSection: some View {

@@ -23,6 +23,7 @@ enum TodoTaskStoreError: LocalizedError {
 }
 
 protocol TodoTaskStoring {
+    func loadAllTasks() throws -> [TodoTask]
     func loadTasks() throws -> [TodoTask]
     func saveTasks(_ tasks: [TodoTask]) throws
     @discardableResult
@@ -65,6 +66,10 @@ final class TodoTaskStore: TodoTaskStoring {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
+    }
+
+    func loadAllTasks() throws -> [TodoTask] {
+        try readPersistedTasksFromDisk().tasks
     }
 
     /// Returns tasks that are created today and not expired.

@@ -33,46 +33,56 @@ final class TodayTodoViewModelTests: XCTestCase {
         try viewModel.addTask(title: "Buy milk")
         try viewModel.reloadTasks()
 
-        XCTAssertEqual(viewModel.tasks.count, 1)
-        XCTAssertEqual(viewModel.tasks.first?.title, "Buy milk")
-        XCTAssertFalse(viewModel.tasks.first?.isCompleted ?? true)
+        XCTAssertEqual(viewModel.visibleTasks.count, 1)
+        XCTAssertEqual(viewModel.visibleTasks.first?.title, "Buy milk")
+        XCTAssertFalse(viewModel.visibleTasks.first?.isCompleted ?? true)
     }
 
-    func test_yesterdayTasksAreHidden() throws {
+    func test_yesterdayTasksAreHiddenFromVisibleList() throws {
         try seedTask(title: "Yesterday task", createdOn: yesterday)
 
         let viewModel = makeViewModel(fixedDate: today)
         try viewModel.reloadTasks()
 
-        XCTAssertTrue(viewModel.tasks.isEmpty)
+        XCTAssertTrue(viewModel.visibleTasks.isEmpty)
+    }
+
+    func test_yesterdayTasksAppearInExpiredList() throws {
+        try seedTask(title: "Yesterday task", createdOn: yesterday)
+
+        let viewModel = makeViewModel(fixedDate: today)
+        try viewModel.reloadTasks()
+
+        XCTAssertEqual(viewModel.expiredTasks.count, 1)
+        XCTAssertEqual(viewModel.expiredTasks.first?.title, "Yesterday task")
     }
 
     func test_addTaskAddsNewTask() throws {
         let viewModel = makeViewModel(fixedDate: today)
         try viewModel.reloadTasks()
-        XCTAssertTrue(viewModel.tasks.isEmpty)
+        XCTAssertTrue(viewModel.visibleTasks.isEmpty)
 
         try viewModel.addTask(title: "Walk the dog")
 
-        XCTAssertEqual(viewModel.tasks.count, 1)
-        XCTAssertEqual(viewModel.tasks.first?.title, "Walk the dog")
+        XCTAssertEqual(viewModel.visibleTasks.count, 1)
+        XCTAssertEqual(viewModel.visibleTasks.first?.title, "Walk the dog")
     }
 
     func test_toggleCompletionUpdatesTask() throws {
         let viewModel = makeViewModel(fixedDate: today)
         try viewModel.addTask(title: "Read a chapter")
-        let taskID = try XCTUnwrap(viewModel.tasks.first?.id)
+        let taskID = try XCTUnwrap(viewModel.visibleTasks.first?.id)
 
         try viewModel.toggleCompletion(for: taskID)
 
-        XCTAssertTrue(viewModel.tasks.first?.isCompleted ?? false)
+        XCTAssertTrue(viewModel.visibleTasks.first?.isCompleted ?? false)
 
         try viewModel.toggleCompletion(for: taskID)
 
-        XCTAssertFalse(viewModel.tasks.first?.isCompleted ?? true)
+        XCTAssertFalse(viewModel.visibleTasks.first?.isCompleted ?? true)
     }
 
-    func test_expiredTaskIsHidden() throws {
+    func test_expiredTaskIsHiddenFromVisibleList() throws {
         let createdAt = today!
         let expiredAt = testCalendar.date(byAdding: .hour, value: 1, to: createdAt)!
         try seedTask(
@@ -85,7 +95,24 @@ final class TodayTodoViewModelTests: XCTestCase {
         let viewModel = makeViewModel(fixedDate: afterExpiration)
         try viewModel.reloadTasks()
 
-        XCTAssertTrue(viewModel.tasks.isEmpty)
+        XCTAssertTrue(viewModel.visibleTasks.isEmpty)
+    }
+
+    func test_expiredTaskAppearsInExpiredList() throws {
+        let createdAt = today!
+        let expiredAt = testCalendar.date(byAdding: .hour, value: 1, to: createdAt)!
+        try seedTask(
+            title: "Expired task",
+            createdOn: createdAt,
+            expiresAt: expiredAt
+        )
+
+        let afterExpiration = testCalendar.date(byAdding: .hour, value: 2, to: createdAt)!
+        let viewModel = makeViewModel(fixedDate: afterExpiration)
+        try viewModel.reloadTasks()
+
+        XCTAssertEqual(viewModel.expiredTasks.count, 1)
+        XCTAssertEqual(viewModel.expiredTasks.first?.title, "Expired task")
     }
 
     func test_futureExpirationTaskIsVisible() throws {
@@ -100,8 +127,9 @@ final class TodayTodoViewModelTests: XCTestCase {
         let viewModel = makeViewModel(fixedDate: createdAt)
         try viewModel.reloadTasks()
 
-        XCTAssertEqual(viewModel.tasks.count, 1)
-        XCTAssertEqual(viewModel.tasks.first?.title, "Later task")
+        XCTAssertEqual(viewModel.visibleTasks.count, 1)
+        XCTAssertEqual(viewModel.visibleTasks.first?.title, "Later task")
+        XCTAssertTrue(viewModel.expiredTasks.isEmpty)
     }
 
     func test_addTaskRejectsPastExpiration() throws {
@@ -114,7 +142,7 @@ final class TodayTodoViewModelTests: XCTestCase {
                 return XCTFail("Expected invalidExpiration, got \(error)")
             }
         }
-        XCTAssertTrue(viewModel.tasks.isEmpty)
+        XCTAssertTrue(viewModel.visibleTasks.isEmpty)
     }
 
     // MARK: - Helpers

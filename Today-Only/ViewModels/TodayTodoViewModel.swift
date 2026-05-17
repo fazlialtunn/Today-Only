@@ -19,7 +19,9 @@ enum TodayTodoViewModelError: LocalizedError, Equatable {
 
 @MainActor
 final class TodayTodoViewModel: ObservableObject {
-    @Published private(set) var tasks: [TodoTask] = []
+    @Published private(set) var visibleTasks: [TodoTask] = []
+    @Published private(set) var expiredTasks: [TodoTask] = []
+    @Published var isShowingExpired = false
     @Published var isExpirationEnabled = false
     @Published var selectedExpirationTime: Date
     @Published private(set) var validationErrorMessage: String?
@@ -57,10 +59,12 @@ final class TodayTodoViewModel: ObservableObject {
         self.selectedExpirationTime = dateProvider.now()
     }
 
-    /// Loads visible tasks from storage and updates published state.
+    /// Loads from storage and publishes visible and expired task lists.
     func reloadTasks() throws {
-        let loaded = try store.loadTasks()
-        tasks = Self.sortedVisibleTasks(from: loaded, using: todayFilter)
+        let allTasks = try store.loadAllTasks()
+        let partitioned = todayFilter.partition(allTasks)
+        visibleTasks = Self.sortByCreatedAtAscending(partitioned.visible)
+        expiredTasks = Self.sortByCreatedAtDescending(partitioned.expired)
         lastKnownDayKey = currentDayKey()
         clampSelectedExpirationTime()
     }
@@ -96,12 +100,12 @@ final class TodayTodoViewModel: ObservableObject {
     }
 
     func toggleCompletion(for id: UUID) throws {
-        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = visibleTasks.firstIndex(where: { $0.id == id }) else { return }
 
-        var updated = tasks[index]
+        var updated = visibleTasks[index]
         updated.isCompleted.toggle()
         try store.updateTask(updated)
-        tasks[index] = updated
+        visibleTasks[index] = updated
     }
 
     func clampSelectedExpirationTime() {
@@ -132,12 +136,12 @@ final class TodayTodoViewModel: ObservableObject {
         Self.dayKey(for: dateProvider.now(), calendar: dateProvider.calendar)
     }
 
-    private static func sortedVisibleTasks(
-        from tasks: [TodoTask],
-        using filter: TodayTaskFilter
-    ) -> [TodoTask] {
-        filter.visibleTasks(from: tasks)
-            .sorted { $0.createdAt < $1.createdAt }
+    private static func sortByCreatedAtAscending(_ tasks: [TodoTask]) -> [TodoTask] {
+        tasks.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private static func sortByCreatedAtDescending(_ tasks: [TodoTask]) -> [TodoTask] {
+        tasks.sorted { $0.createdAt > $1.createdAt }
     }
 
     private static func dayKey(for date: Date, calendar: Calendar) -> String {
