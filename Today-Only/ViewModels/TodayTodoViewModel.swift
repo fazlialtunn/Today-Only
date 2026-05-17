@@ -1,5 +1,5 @@
 //
-//  TaskListViewModel.swift
+//  TodayTodoViewModel.swift
 //  Today-Only
 //
 
@@ -7,13 +7,18 @@ import Combine
 import Foundation
 
 @MainActor
-final class TaskListViewModel: ObservableObject {
+final class TodayTodoViewModel: ObservableObject {
     @Published private(set) var tasks: [TodoTask] = []
 
     private let store: TodoTaskStoring
     private let dateProvider: DateProviding
     private let todayFilter: TodayTaskFilter
     private var lastKnownDayKey: String?
+
+    /// Current moment from the injected clock (used for the header date).
+    var currentDate: Date {
+        dateProvider.now()
+    }
 
     init(
         store: TodoTaskStoring,

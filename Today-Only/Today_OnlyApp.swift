@@ -9,9 +9,14 @@ import SwiftUI
 
 @main
 struct Today_OnlyApp: App {
+    private let viewModel = TodayTodoViewModel(
+        store: TodoTaskStore(),
+        dateProvider: SystemDateProvider()
+    )
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(viewModel: viewModel)
         }
     }
 }
