@@ -1,6 +1,6 @@
 # Today-Only Todo App
 
-Eulerity iOS Internship take-home — a SwiftUI app where tasks exist only for the current calendar day.
+Eulerity iOS Internship take-home a SwiftUI app where tasks exist only for the current calendar day.
 
 ## 1. Overall Approach
 
