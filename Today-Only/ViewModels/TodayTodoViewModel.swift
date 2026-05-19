@@ -30,6 +30,7 @@ final class TodayTodoViewModel: ObservableObject {
     private let dateProvider: DateProviding
     private let todayFilter: TodayTaskFilter
     private let expirationValidator: TaskExpirationValidator
+    private let notificationScheduler: TaskNotificationScheduling
     private var lastKnownDayKey: String?
 
     /// Current moment from the injected clock (used for the header date).
@@ -50,13 +51,20 @@ final class TodayTodoViewModel: ObservableObject {
     init(
         store: TodoTaskStoring,
         dateProvider: DateProviding,
-        todayFilter: TodayTaskFilter? = nil
+        todayFilter: TodayTaskFilter? = nil,
+        notificationScheduler: TaskNotificationScheduling? = nil
     ) {
         self.store = store
         self.dateProvider = dateProvider
         self.todayFilter = todayFilter ?? TodayTaskFilter(dateProvider: dateProvider)
         self.expirationValidator = TaskExpirationValidator(dateProvider: dateProvider)
+        self.notificationScheduler = notificationScheduler
+            ?? NotificationScheduler(dateProvider: dateProvider)
         self.selectedExpirationTime = dateProvider.now()
+    }
+
+    func requestNotificationAuthorizationIfNeeded() async {
+        _ = await notificationScheduler.requestAuthorizationIfNeeded()
     }
 
     /// Loads from storage and publishes visible and expired task lists.
@@ -87,8 +95,9 @@ final class TodayTodoViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let expiresAt = try resolvedExpirationDateForNewTask()
+        let task: TodoTask
         do {
-            _ = try store.addTask(title: trimmed, expiresAt: expiresAt)
+            task = try store.addTask(title: trimmed, expiresAt: expiresAt)
         } catch let error as TodoTaskStoreError {
             if case .invalidExpiration(let validationError) = error {
                 throw TodayTodoViewModelError.invalidExpiration(validationError)
@@ -97,6 +106,7 @@ final class TodayTodoViewModel: ObservableObject {
         }
         validationErrorMessage = nil
         try reloadTasks()
+        scheduleNotification(for: task)
     }
 
     func toggleCompletion(for id: UUID) throws {
@@ -106,6 +116,11 @@ final class TodayTodoViewModel: ObservableObject {
         updated.isCompleted.toggle()
         try store.updateTask(updated)
         visibleTasks[index] = updated
+        if updated.isCompleted {
+            cancelNotification(for: id)
+        } else {
+            scheduleNotification(for: updated)
+        }
     }
 
     func clampSelectedExpirationTime() {
@@ -134,6 +149,18 @@ final class TodayTodoViewModel: ObservableObject {
 
     private func currentDayKey() -> String {
         Self.dayKey(for: dateProvider.now(), calendar: dateProvider.calendar)
+    }
+
+    private func scheduleNotification(for task: TodoTask) {
+        Task {
+            await notificationScheduler.scheduleReminder(for: task)
+        }
+    }
+
+    private func cancelNotification(for taskID: UUID) {
+        Task {
+            await notificationScheduler.cancelReminder(for: taskID)
+        }
     }
 
     private static func sortByCreatedAtAscending(_ tasks: [TodoTask]) -> [TodoTask] {

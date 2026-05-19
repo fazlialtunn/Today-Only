@@ -30,6 +30,9 @@ struct ContentView: View {
             HapticFeedback.prepareGenerators()
             viewModel.clampSelectedExpirationTime()
             try? viewModel.reloadTasks()
+            Task {
+                await viewModel.requestNotificationAuthorizationIfNeeded()
+            }
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active else { return }
