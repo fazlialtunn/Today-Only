@@ -19,21 +19,21 @@ struct TodayEmptyStateView: View {
         switch style {
         case .noTasksYet:
             return (
-                "checklist",
-                "Start fresh today",
-                "What do you want to get done? Add a task below — it only counts for today."
+                "tray",
+                "No Reminders",
+                "Add a task below."
             )
         case .allCompleted:
             return (
                 "checkmark.circle",
-                "You're all caught up",
-                "Every task for today is done. Enjoy the rest of your day."
+                "All Done",
+                "You have completed every task for today."
             )
         case .noActiveTasks:
             return (
                 "clock",
-                "Nothing active right now",
-                "Today's tasks have wrapped up. Add something new below when you're ready."
+                "No Active Tasks",
+                "Earlier tasks have expired. Add a new one below."
             )
         }
     }
@@ -41,37 +41,34 @@ struct TodayEmptyStateView: View {
     var body: some View {
         let copy = content
 
-        VStack(spacing: isCompact ? 10 : 16) {
+        VStack(spacing: isCompact ? 8 : 12) {
             Image(systemName: copy.icon)
-                .font(.system(size: isCompact ? 32 : 52, weight: .light))
-                .foregroundStyle(Color(.secondaryLabel))
+                .font(.system(size: isCompact ? 28 : 36, weight: .light))
+                .foregroundStyle(.tertiary)
                 .symbolRenderingMode(.hierarchical)
                 .accessibilityHidden(true)
 
-            VStack(spacing: isCompact ? 6 : 8) {
+            VStack(spacing: 4) {
                 Text(copy.title)
-                    .font(isCompact ? .subheadline.weight(.semibold) : .title3.weight(.semibold))
-                    .foregroundStyle(Color(.label))
-                    .multilineTextAlignment(.center)
+                    .font(isCompact ? .subheadline.weight(.medium) : .headline)
+                    .foregroundStyle(.secondary)
 
                 Text(copy.message)
-                    .font(isCompact ? .footnote : .subheadline)
-                    .foregroundStyle(Color(.secondaryLabel))
+                    .font(isCompact ? .caption : .subheadline)
+                    .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(2)
             }
-            .frame(maxWidth: isCompact ? .infinity : 300)
+            .frame(maxWidth: isCompact ? .infinity : 260)
         }
         .frame(maxWidth: .infinity, maxHeight: isCompact ? nil : .infinity)
-        .padding(.horizontal, isCompact ? 16 : 32)
-        .padding(.vertical, isCompact ? 12 : 24)
+        .padding(.horizontal, AppTheme.horizontalPadding)
+        .padding(.vertical, isCompact ? 8 : 32)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(copy.title). \(copy.message)")
     }
 }
 
 extension TodayEmptyStateView {
-    /// Style when the main list has no visible tasks.
     static func resolveWhenEmpty(for viewModel: TodayTodoViewModel) -> TodayEmptyStateStyle {
         let hadTasksToday = viewModel.expiredTasks.contains {
             Calendar.current.isDateInToday($0.createdAt)
@@ -87,11 +84,6 @@ extension TodayEmptyStateView {
 
 #Preview("No tasks") {
     TodayEmptyStateView(style: .noTasksYet)
-        .background(AppTheme.screenBackground)
-}
-
-#Preview("All completed") {
-    TodayEmptyStateView(style: .allCompleted)
         .background(AppTheme.screenBackground)
 }
 

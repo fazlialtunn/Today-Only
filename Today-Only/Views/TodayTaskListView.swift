@@ -10,56 +10,65 @@ struct TodayTaskListView: View {
     let onToggle: (UUID) -> Void
 
     var body: some View {
-        Group {
-            if viewModel.visibleTasks.isEmpty && !viewModel.isShowingExpired {
-                TodayEmptyStateView(style: TodayEmptyStateView.resolveWhenEmpty(for: viewModel))
-            } else {
-                List {
-                    if TodayEmptyStateView.allTasksCompleted(in: viewModel) {
-                        Section {
-                            TodayEmptyStateView(style: .allCompleted, isCompact: true)
-                                .listRowBackground(Color.clear)
-                        }
-                    }
+        List {
+            Section {
+                Text(viewModel.currentDate, format: .dateTime.weekday(.wide).month(.wide).day())
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
 
-                    Section {
-                        if viewModel.visibleTasks.isEmpty {
-                            TodayEmptyStateView(
-                                style: TodayEmptyStateView.resolveWhenEmpty(for: viewModel),
-                                isCompact: true
-                            )
-                            .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(viewModel.visibleTasks) { task in
-                                TaskRowView(task: task) {
-                                    onToggle(task.id)
-                                }
-                                .listRowBackground(AppTheme.listRowBackground)
-                            }
-                        }
-                    }
+            if TodayEmptyStateView.allTasksCompleted(in: viewModel) {
+                Section {
+                    TodayEmptyStateView(style: .allCompleted, isCompact: true)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            }
 
-                    if viewModel.isShowingExpired {
-                        Section {
-                            if viewModel.expiredTasks.isEmpty {
-                                Text("No expired tasks")
-                                    .foregroundStyle(Color(.secondaryLabel))
-                            } else {
-                                ForEach(viewModel.expiredTasks) { task in
-                                    ExpiredTaskRowView(task: task)
-                                        .listRowBackground(AppTheme.listRowBackground)
-                                }
-                            }
-                        } header: {
-                            Text("Expired")
-                                .foregroundStyle(Color(.secondaryLabel))
+            Section {
+                if viewModel.visibleTasks.isEmpty {
+                    TodayEmptyStateView(
+                        style: TodayEmptyStateView.resolveWhenEmpty(for: viewModel),
+                        isCompact: true
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else {
+                    ForEach(viewModel.visibleTasks) { task in
+                        TaskRowView(task: task) {
+                            onToggle(task.id)
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+            }
+
+            Section {
+                Toggle("Show Expired", isOn: $viewModel.isShowingExpired)
+                    .font(.body)
+            }
+
+            if viewModel.isShowingExpired {
+                Section {
+                    if viewModel.expiredTasks.isEmpty {
+                        Text("No expired tasks")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(viewModel.expiredTasks) { task in
+                            ExpiredTaskRowView(task: task)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        }
+                    }
+                } header: {
+                    Text("Expired")
+                }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .background(AppTheme.screenBackground)
     }
 }

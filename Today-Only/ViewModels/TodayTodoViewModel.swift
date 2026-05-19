@@ -31,6 +31,7 @@ final class TodayTodoViewModel: ObservableObject {
     private let todayFilter: TodayTaskFilter
     private let expirationValidator: TaskExpirationValidator
     private let notificationScheduler: TaskNotificationScheduling
+    private let expirationMonitor: TaskExpirationMonitor
     private var lastKnownDayKey: String?
 
     /// Current moment from the injected clock (used for the header date).
@@ -52,7 +53,8 @@ final class TodayTodoViewModel: ObservableObject {
         store: TodoTaskStoring,
         dateProvider: DateProviding,
         todayFilter: TodayTaskFilter? = nil,
-        notificationScheduler: TaskNotificationScheduling? = nil
+        notificationScheduler: TaskNotificationScheduling? = nil,
+        expirationMonitor: TaskExpirationMonitor? = nil
     ) {
         self.store = store
         self.dateProvider = dateProvider
@@ -60,7 +62,19 @@ final class TodayTodoViewModel: ObservableObject {
         self.expirationValidator = TaskExpirationValidator(dateProvider: dateProvider)
         self.notificationScheduler = notificationScheduler
             ?? NotificationScheduler(dateProvider: dateProvider)
+        self.expirationMonitor = expirationMonitor ?? TaskExpirationMonitor(interval: 30)
         self.selectedExpirationTime = dateProvider.now()
+    }
+
+    func startExpirationMonitoring() {
+        expirationMonitor.startPeriodic { [weak self] in
+            try? self?.refreshExpiredTasks()
+        }
+        scheduleNextExpirationRefresh()
+    }
+
+    func stopExpirationMonitoring() {
+        expirationMonitor.stopAll()
     }
 
     func requestNotificationAuthorizationIfNeeded() async {
@@ -75,6 +89,7 @@ final class TodayTodoViewModel: ObservableObject {
         expiredTasks = Self.sortByCreatedAtDescending(partitioned.expired)
         lastKnownDayKey = currentDayKey()
         clampSelectedExpirationTime()
+        scheduleNextExpirationRefresh()
     }
 
     /// Reloads when the calendar day changes.
@@ -160,6 +175,20 @@ final class TodayTodoViewModel: ObservableObject {
     private func cancelNotification(for taskID: UUID) {
         Task {
             await notificationScheduler.cancelReminder(for: taskID)
+        }
+    }
+
+    private func scheduleNextExpirationRefresh() {
+        let now = dateProvider.now()
+        let upcomingExpirations = visibleTasks.compactMap(\.expiresAt).filter { $0 > now }
+        guard let nearestExpiration = upcomingExpirations.min() else {
+            expirationMonitor.cancelOneShot()
+            return
+        }
+
+        let delay = nearestExpiration.timeIntervalSince(now)
+        expirationMonitor.scheduleOneShot(after: delay) { [weak self] in
+            try? self?.refreshExpiredTasks()
         }
     }
 

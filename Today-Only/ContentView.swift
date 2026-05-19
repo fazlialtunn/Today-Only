@@ -3,7 +3,6 @@
 //  Today-Only
 //
 
-import Combine
 import SwiftUI
 
 struct ContentView: View {
@@ -16,78 +15,45 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TodayHeaderView(date: viewModel.currentDate)
-
-            showExpiredToggle
-
+        NavigationStack {
             TodayTaskListView(viewModel: viewModel, onToggle: toggleTask)
-
-            addTaskSection
+                .navigationTitle("Today")
+                .navigationBarTitleDisplayMode(.large)
+                .background(AppTheme.screenBackground)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    TaskComposerView(
+                        newTaskTitle: $newTaskTitle,
+                        viewModel: viewModel,
+                        onSubmit: submitNewTask
+                    )
+                }
         }
         .background(AppTheme.screenBackground)
         .onAppear {
             HapticFeedback.prepareGenerators()
             viewModel.clampSelectedExpirationTime()
             try? viewModel.reloadTasks()
+            viewModel.startExpirationMonitoring()
             Task {
                 await viewModel.requestNotificationAuthorizationIfNeeded()
             }
         }
+        .onDisappear {
+            viewModel.stopExpirationMonitoring()
+        }
         .onChange(of: scenePhase) { phase in
-            guard phase == .active else { return }
-            viewModel.clampSelectedExpirationTime()
-            try? viewModel.refreshForCurrentDay()
-            try? viewModel.refreshExpiredTasks()
-        }
-        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
-            try? viewModel.refreshExpiredTasks()
-        }
-    }
-
-    private var showExpiredToggle: some View {
-        Toggle("Show expired", isOn: $viewModel.isShowingExpired)
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-    }
-
-    private var addTaskSection: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                TextField("New task", text: $newTaskTitle)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.done)
-                    .onSubmit(submitNewTask)
-
-                Button("Add", action: submitNewTask)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            Toggle("Expire at time", isOn: $viewModel.isExpirationEnabled)
-                .onChange(of: viewModel.isExpirationEnabled) { _ in
-                    viewModel.clampSelectedExpirationTime()
-                }
-
-            if viewModel.isExpirationEnabled {
-                DatePicker(
-                    "Expires",
-                    selection: $viewModel.selectedExpirationTime,
-                    in: viewModel.expirationTimeRange,
-                    displayedComponents: .hourAndMinute
-                )
-                .datePickerStyle(.compact)
-            }
-
-            if let message = viewModel.validationErrorMessage {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.validationError)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            switch phase {
+            case .active:
+                viewModel.clampSelectedExpirationTime()
+                try? viewModel.refreshForCurrentDay()
+                try? viewModel.refreshExpiredTasks()
+                viewModel.startExpirationMonitoring()
+            case .background, .inactive:
+                viewModel.stopExpirationMonitoring()
+            @unknown default:
+                break
             }
         }
-        .padding()
-        .background(AppTheme.elevatedSurface)
     }
 
     private func submitNewTask() {
