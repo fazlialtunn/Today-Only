@@ -150,7 +150,11 @@ final class TodayTodoViewModelTests: XCTestCase {
     private func makeViewModel(fixedDate: Date) -> TodayTodoViewModel {
         let dateProvider = FixedDateProvider(fixedDate: fixedDate, calendar: testCalendar)
         let store = TodoTaskStore(fileURL: tempFileURL, dateProvider: dateProvider)
-        let viewModel = TodayTodoViewModel(store: store, dateProvider: dateProvider)
+        let viewModel = TodayTodoViewModel(
+            store: store,
+            dateProvider: dateProvider,
+            notificationScheduler: NoOpTaskNotificationScheduler()
+        )
         viewModel.clampSelectedExpirationTime()
         return viewModel
     }
