@@ -15,7 +15,6 @@ struct PersistedTasks: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case tasks
-        case dayKey
     }
 
     init(from decoder: Decoder) throws {
