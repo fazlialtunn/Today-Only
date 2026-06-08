@@ -24,8 +24,6 @@ enum TodoTaskStoreError: LocalizedError {
 
 protocol TodoTaskStoring {
     func loadAllTasks() throws -> [TodoTask]
-    func loadTasks() throws -> [TodoTask]
-    func saveTasks(_ tasks: [TodoTask]) throws
     @discardableResult
     func addTask(title: String, expiresAt: Date?) throws -> TodoTask
     func updateTask(_ task: TodoTask) throws
@@ -70,22 +68,6 @@ final class TodoTaskStore: TodoTaskStoring {
 
     func loadAllTasks() throws -> [TodoTask] {
         try readPersistedTasksFromDisk().tasks
-    }
-
-    /// Returns tasks that are created today and not expired.
-    func loadTasks() throws -> [TodoTask] {
-        let stored = try readPersistedTasksFromDisk()
-        return todayFilter.visibleTasks(from: stored.tasks)
-    }
-
-    /// Replaces today's visible tasks while preserving older and expired tasks on disk.
-    func saveTasks(_ tasks: [TodoTask]) throws {
-        var stored = try readPersistedTasksFromDisk()
-        let preserved = stored.tasks.filter { !todayFilter.isCreatedToday($0) }
-        let todayOnDisk = stored.tasks.filter { todayFilter.isCreatedToday($0) }
-        let expiredToday = todayOnDisk.filter { todayFilter.isExpired($0) }
-        stored.tasks = preserved + expiredToday + tasks
-        try persist(stored)
     }
 
     @discardableResult
